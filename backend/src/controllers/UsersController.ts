@@ -1,69 +1,81 @@
-import { Request, Response } from 'express';
+import { Request, Response } from "express";
+import Zod from "zod";
 
-import { prisma } from '../lib/prisma';
+import { prisma } from "../lib/prisma";
+import { AppError } from "../errors/AppError";
 
 export class UsersController {
   public async list(request: Request, response: Response) {
     const users = await prisma.user.findMany();
 
-    return response.status(200).json({
-      users,
-    });
+    return response.status(200).json(users);
   }
 
   public async show(request: Request, response: Response) {
     const { id } = request.params;
+
     const user = await prisma.user.findUnique({
-      where: {id}
+      where: { id },
     });
 
-    return response.status(200).json({
-      user
-    });
+    return response.status(200).json(user);
   }
 
   public async create(request: Request, response: Response) {
-    const { id, name, email } = request.body;
-    const users = await prisma.user.create({
+    const bodySchema = Zod.object({
+      name: Zod.string().min(3),
+      email: Zod.string().email(),
+    }).strict();
+
+    const { name, email } = bodySchema.parse(request.body);
+
+    const userExists = await prisma.user.findFirst({
+      where: { email },
+    });
+
+    if (userExists) {
+      throw new AppError("Email already exists", 409);
+    }
+
+    const user = await prisma.user.create({
       data: {
-        id,
         name,
         email,
       },
-    })
-
-    return response.status(200).json({
-      users,
     });
+
+    return response.status(200).json(user);
   }
 
   public async update(request: Request, response: Response) {
-    const { name, email } = request.body;
+    const bodySchema = Zod.object({
+      name: Zod.string().min(3).nullish(),
+      email: Zod.string().email().nullish(),
+    }).strict();
 
-    let data = {}
-    if( name ) data = {...data , name};
-    if( email ) data = {...data, email};
+    const { id } = request.params;
+    const { name, email } = bodySchema.parse(request.body);
 
-    const id = request.params.id;
-    const user = await prisma.user.update({
+    let data = {};
+
+    if (name) data = { name };
+    if (email) data = { ...data, email };
+
+    const userUpdated = await prisma.user.update({
       where: { id },
-      data
-    })
-
-    return response.status(200).json({
-      user
+      data,
     });
+
+    return response.status(200).json(userUpdated);
   }
 
   public async delete(request: Request, response: Response) {
-    const id = request.params.id;
+    const { id } = request.params;
+
     await prisma.user.delete({
-      where: { id }
-    })
+      where: { id },
+    });
 
-    return response.status(204).json({
-      message: 'Removed success'
-    })
+    return response.status(204).json();
   }
-
 }
