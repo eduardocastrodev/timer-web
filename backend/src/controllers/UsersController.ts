@@ -3,6 +3,7 @@ import Zod from "zod";
 
 import { prisma } from "../lib/prisma";
 import { AppError } from "../errors/AppError";
+import { hash } from "bcrypt";
 
 export class UsersController {
   public async list(request: Request, response: Response) {
@@ -25,9 +26,10 @@ export class UsersController {
     const bodySchema = Zod.object({
       name: Zod.string().min(3),
       email: Zod.string().email(),
+      password: Zod.string().min(6),
     }).strict();
 
-    const { name, email } = bodySchema.parse(request.body);
+    const { name, email, password } = bodySchema.parse(request.body);
 
     const userExists = await prisma.user.findFirst({
       where: { email },
@@ -37,10 +39,13 @@ export class UsersController {
       throw new AppError("Email already exists", 409);
     }
 
+    const password_hash = await hash(password, 6);
+
     const user = await prisma.user.create({
       data: {
         name,
         email,
+        password_hash,
       },
     });
 
